@@ -10,94 +10,95 @@
 #include "Misc/FileHelper.h"
 
 bool FGridlyLocalizedTextConverter::TableRowsToPolyglotTextDatas(const TArray<FGridlyTableRow>& TableRows,
-	TMap<FString, FPolyglotTextData>& OutPolyglotTextDatas)
+    TMap<FString, FPolyglotTextData>& OutPolyglotTextDatas)
 {
-	UGridlyGameSettings* GameSettings = GetMutableDefault<UGridlyGameSettings>();
-	const TArray<FString> TargetCultures = FGridlyCultureConverter::GetTargetCultures();
+    UGridlyGameSettings* GameSettings = GetMutableDefault<UGridlyGameSettings>();
+    const TArray<FString> TargetCultures = FGridlyCultureConverter::GetTargetCultures();
 
-	const bool bUseCombinedNamespaceKey = GameSettings->bUseCombinedNamespaceId;
-	const bool bUsePathAsNamespace = !bUseCombinedNamespaceKey && GameSettings->NamespaceColumnId == "path";
+    const bool bUseCombinedNamespaceKey = GameSettings->bUseCombinedNamespaceId;
+    const bool bUsePathAsNamespace = !bUseCombinedNamespaceKey && GameSettings->NamespaceColumnId == "path";
 
-	for (int i = 0; i < TableRows.Num(); i++)
-	{
-		UE_LOG(LogGridly, Verbose, TEXT("Row %d: %s (%s)"), i, *TableRows[i].Id, *TableRows[i].Path);
+    for (int i = 0; i < TableRows.Num(); i++)
+    {
+        UE_LOG(LogGridly, Verbose, TEXT("Row %d: %s (%s)"), i, *TableRows[i].Id, *TableRows[i].Path);
 
-		FString Key = TableRows[i].Id;
-		FString Namespace = bUsePathAsNamespace ? TableRows[i].Path : TEXT("");
-		FString SourceCulture;
-		FString SourceText;
-		TMap<FString, FString> Translations;
+        FString Key = TableRows[i].Id;
+        FString Namespace = bUsePathAsNamespace ? TableRows[i].Path : TEXT("");
+        FString SourceCulture;
+        FString SourceText;
+        TMap<FString, FString> Translations;
 
-		for (int j = 0; j < TableRows[i].Cells.Num(); j++)
-		{
-			const FGridlyTableCell& GridlyTableCell = TableRows[i].Cells[j];
+        for (int j = 0; j < TableRows[i].Cells.Num(); j++)
+        {
+            const FGridlyTableCell& GridlyTableCell = TableRows[i].Cells[j];
 
-			// If special columns
+            // If special columns
+            if (!bUsePathAsNamespace && GridlyTableCell.ColumnId == GameSettings->NamespaceColumnId)
+            {
+                Namespace = GridlyTableCell.Value;
+                continue;
+            }
 
-			if (!bUsePathAsNamespace && GridlyTableCell.ColumnId == GameSettings->NamespaceColumnId)
-			{
-				Namespace = GridlyTableCell.Value;
-				continue;
-			}
+            // If language column
+            if (GridlyTableCell.ColumnId.StartsWith(GameSettings->SourceLanguageColumnIdPrefix))
+            {
+                const FString GridlyCulture = GridlyTableCell.ColumnId.RightChop(GameSettings->SourceLanguageColumnIdPrefix.Len());
+                FString Culture;
+                if (FGridlyCultureConverter::ConvertFromGridly(TargetCultures, GridlyCulture, Culture))
+                {
+                    SourceCulture = Culture;
+                    SourceText = GridlyTableCell.Value;
+                }
+            }
+            else if (GridlyTableCell.ColumnId.StartsWith(GameSettings->TargetLanguageColumnIdPrefix))
+            {
+                const FString GridlyCulture = GridlyTableCell.ColumnId.RightChop(GameSettings->TargetLanguageColumnIdPrefix.Len());
+                FString Culture;
+                if (FGridlyCultureConverter::ConvertFromGridly(TargetCultures, GridlyCulture, Culture))
+                {
+                    Translations.Add(Culture, GridlyTableCell.Value);
+                }
+            }
+        }
 
-			// If language column
+        // Namespace / key fixes
+        if (bUseCombinedNamespaceKey)
+        {
+            FString NewKey;
+            if (Key.Split(",", &Namespace, &NewKey))
+            {
+                Key = NewKey;
+            }
+        }
 
-			if (GridlyTableCell.ColumnId.StartsWith(GameSettings->SourceLanguageColumnIdPrefix))
-			{
-				const FString GridlyCulture = GridlyTableCell.ColumnId.RightChop(GameSettings->SourceLanguageColumnIdPrefix.Len());
-				FString Culture;
-				if (FGridlyCultureConverter::ConvertFromGridly(TargetCultures, GridlyCulture, Culture))
-				{
-					SourceCulture = Culture;
-					SourceText = GridlyTableCell.Value;
-				}
-			}
-			else if (GridlyTableCell.ColumnId.StartsWith(GameSettings->TargetLanguageColumnIdPrefix))
-			{
-				const FString GridlyCulture = GridlyTableCell.ColumnId.RightChop(GameSettings->TargetLanguageColumnIdPrefix.Len());
-				FString Culture;
-				if (FGridlyCultureConverter::ConvertFromGridly(TargetCultures, GridlyCulture, Culture))
-				{
-					Translations.Add(Culture, GridlyTableCell.Value);
-				}
-			}
-		}
+        Namespace = Namespace.Replace(TEXT(" "), TEXT(""));
 
-		// Namespace / key fixes
+        if (SourceText.IsEmpty() || SourceCulture.IsEmpty())
+        {
+            UE_LOG(LogGridly, Warning, TEXT("Could not find native culture/source string in imported text with key: %s,%s"),
+                *Namespace, *Key);
+            continue;
+        }
 
-		if (bUseCombinedNamespaceKey)
-		{
-			FString NewKey;
-			if (Key.Split(",", &Namespace, &NewKey))
-			{
-				Key = NewKey;
-			}
-		}
+        // Create the PolyglotTextData and add the source text
+        FPolyglotTextData PolyglotTextData(ELocalizedTextSourceCategory::Game, Namespace, Key, SourceText, SourceCulture);
 
-		Namespace = Namespace.Replace(TEXT(" "), TEXT(""));
+        // Add translations if they exist
+        for (const TPair<FString, FString>& Pair : Translations)
+        {
+            if (!Pair.Value.IsEmpty())
+            {
+                PolyglotTextData.AddLocalizedString(Pair.Key, Pair.Value);
+            }
+        }
 
-		if (SourceText.IsEmpty() || SourceCulture.IsEmpty())
-		{
-			UE_LOG(LogGridly, Warning, TEXT("Could not find native culture/source string in imported text with key: %s,%s"),
-				*Namespace, *Key);
-			continue;
-		}
+        // Add the PolyglotTextData to the output map
+        OutPolyglotTextDatas.Add(Key, PolyglotTextData);
+    }
 
-		FPolyglotTextData PolyglotTextData(ELocalizedTextSourceCategory::Game, Namespace, Key, SourceText, SourceCulture);
-
-		for (const TPair<FString, FString>& Pair : Translations)
-		{
-			if (!Pair.Value.IsEmpty())
-			{
-				PolyglotTextData.AddLocalizedString(Pair.Key, Pair.Value);
-			}
-		}
-
-		OutPolyglotTextDatas.Add(Key, PolyglotTextData);
-	}
-
-	return OutPolyglotTextDatas.Num() > 0;
+    return OutPolyglotTextDatas.Num() > 0;
 }
+
 
 bool FGridlyLocalizedTextConverter::WritePoFile(const TArray<FPolyglotTextData>& PolyglotTextDatas, const FString& TargetCulture,
 	const FString& Path)
@@ -108,9 +109,10 @@ bool FGridlyLocalizedTextConverter::WritePoFile(const TArray<FPolyglotTextData>&
 	for (int i = 0; i < PolyglotTextDatas.Num(); i++)
 	{
 		FString TargetString;
-
+        
 		if (PolyglotTextDatas[i].GetLocalizedString(TargetCulture, TargetString))
 		{
+        
 			Lines.Add(FString::Printf(TEXT("msgctxt \"%s,%s\""), *PolyglotTextDatas[i].GetNamespace(),
 				*PolyglotTextDatas[i].GetKey()));
 
@@ -121,7 +123,21 @@ bool FGridlyLocalizedTextConverter::WritePoFile(const TArray<FPolyglotTextData>&
 			Lines.Add(FString::Printf(TEXT("msgstr \"%s\""), *TargetString));
 
 			Lines.Add(TEXT(""));
-		}
+         
+        }
+        else {
+            Lines.Add(FString::Printf(TEXT("msgctxt \"%s,%s\""), *PolyglotTextDatas[i].GetNamespace(),
+                *PolyglotTextDatas[i].GetKey()));
+
+            FString NativeString = PolyglotTextDatas[i].GetNativeString().ReplaceCharWithEscapedChar();
+            Lines.Add(FString::Printf(TEXT("msgid \"%s\""), *NativeString));
+
+            TargetString = TargetString.ReplaceCharWithEscapedChar();
+            Lines.Add(FString::Printf(TEXT("msgstr \"%s\""), ""));
+
+            Lines.Add(TEXT(""));
+        }
+        
 	}
 
 	if (FFileHelper::SaveStringArrayToFile(Lines, *Path))

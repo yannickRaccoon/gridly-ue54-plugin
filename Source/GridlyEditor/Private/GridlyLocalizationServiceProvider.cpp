@@ -113,6 +113,8 @@ ELocalizationServiceOperationCommandResult::Type FGridlyLocalizationServiceProvi
 	return ELocalizationServiceOperationCommandResult::Succeeded;
 }
 
+DEFINE_LOG_CATEGORY_STATIC(LogGridlyLocalizationServiceProvider, Log, All);
+
 ELocalizationServiceOperationCommandResult::Type FGridlyLocalizationServiceProvider::Execute(
 	const TSharedRef<ILocalizationServiceOperation, ESPMode::ThreadSafe>& InOperation,
 	const TArray<FLocalizationServiceTranslationIdentifier>& InTranslationIds,
@@ -129,35 +131,37 @@ ELocalizationServiceOperationCommandResult::Type FGridlyLocalizationServiceProvi
 	Task->OnSuccessDelegate.BindLambda(
 		[this, DownloadOperation, InOperationCompleteDelegate, TargetCulture](const TArray<FPolyglotTextData>& PolyglotTextDatas)
 		{
+			/*
 			if (PolyglotTextDatas.Num() > 0)
 			{
+			*/
 				const FString AbsoluteFilePathAndName = FPaths::ConvertRelativePathToFull(
 					FPaths::ProjectDir() / DownloadOperation->GetInRelativeOutputFilePathAndName());
 
-				// Convert FString to std::string for IsFileNotEmpty function
-				std::string filePath(TCHAR_TO_UTF8(*AbsoluteFilePathAndName));
 				bool writeProc = FGridlyLocalizedTextConverter::WritePoFile(PolyglotTextDatas, TargetCulture, AbsoluteFilePathAndName);
-
-				if (writeProc) {
-					// Callback
+					// Callback for successful write
 					InOperationCompleteDelegate.Execute(DownloadOperation, ELocalizationServiceOperationCommandResult::Succeeded);
-				}
+			/*
 			}
 			else
 			{
+				// Handle parse failure
 				DownloadOperation->SetOutErrorText(LOCTEXT("GridlyErrorParse", "Failed to parse downloaded content"));
 				InOperationCompleteDelegate.Execute(DownloadOperation, ELocalizationServiceOperationCommandResult::Failed);
 			}
+			*/
 		});
 
 	// On fail
 	Task->OnFailDelegate.BindLambda(
 		[DownloadOperation, InOperationCompleteDelegate](const TArray<FPolyglotTextData>& PolyglotTextDatas, const FGridlyResult& Error)
 		{
+			// Handle download failure
 			DownloadOperation->SetOutErrorText(FText::FromString(Error.Message));
 			InOperationCompleteDelegate.Execute(DownloadOperation, ELocalizationServiceOperationCommandResult::Failed);
 		});
 
+	// Activate the task
 	Task->Activate();
 
 	return ELocalizationServiceOperationCommandResult::Succeeded;
@@ -286,9 +290,22 @@ void FGridlyLocalizationServiceProvider::ImportAllCulturesForTargetFromGridly(
 			DownloadTargetFileOp->SetInLocale(CultureName);
 
 			FString Path = FPaths::ProjectSavedDir() / "Temp" / "Game" / LocalizationTarget->Settings.Name / CultureName /
-			               LocalizationTarget->Settings.Name + ".po";
+				LocalizationTarget->Settings.Name + ".po";
 			FPaths::MakePathRelativeTo(Path, *FPaths::ProjectDir());
 			DownloadTargetFileOp->SetInRelativeOutputFilePathAndName(Path);
+
+			// Check the file length and delete if it is empty
+			IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
+			if (PlatformFile.FileExists(*Path))
+			{
+				int64 FileSize = PlatformFile.FileSize(*Path);
+				if (FileSize <= 0)
+				{
+					PlatformFile.DeleteFile(*Path);
+					UE_LOG(LogGridlyLocalizationServiceProvider, Warning, TEXT("Deleted empty file: %s"), *Path);
+					continue;
+				}
+			}
 
 			auto OperationCompleteDelegate = FLocalizationServiceOperationComplete::CreateRaw(this,
 				&FGridlyLocalizationServiceProvider::OnImportCultureForTargetFromGridly, bIsTargetSet);
@@ -301,6 +318,21 @@ void FGridlyLocalizationServiceProvider::ImportAllCulturesForTargetFromGridly(
 
 		ImportAllCulturesForTargetFromGridlySlowTask.Reset();
 	}
+}
+
+bool FGridlyLocalizationServiceProvider::IsFileNotEmpty(const std::string& filePath)
+{
+	std::ifstream file(filePath, std::ios::binary);
+	if (!file)
+	{
+		UE_LOG(LogGridlyLocalizationServiceProvider, Error, TEXT("Error: Could not open file %s"), *FString(filePath.c_str()));
+		return false; // Or handle error as appropriate
+	}
+
+	// Check if the file is empty by attempting to read the first character
+	char c;
+	file >> std::noskipws >> c; // Don't skip whitespace
+	return file.good();
 }
 
 void FGridlyLocalizationServiceProvider::OnImportCultureForTargetFromGridly(const FLocalizationServiceOperationRef& Operation,
@@ -337,11 +369,18 @@ void FGridlyLocalizationServiceProvider::OnImportCultureForTargetFromGridly(cons
 		
 		if (!bIsTargetSet)
 		{
-			LocalizationCommandletTasks::ImportTextForTarget(MainFrameParentWindow.ToSharedRef(), Target,
-				FPaths::GetPath(FPaths::GetPath(AbsoluteFilePathAndName)));
+			std::string StdPath(TCHAR_TO_UTF8(*AbsoluteFilePathAndName));
+			if (IsFileNotEmpty(StdPath)) {
+				UE_LOG(LogGridlyEditor, Log, TEXT("Error: File is empty %s"), *FString(StdPath.c_str()));
+				//here we call the gather
+				LocalizationCommandletTasks::ImportTextForTarget(MainFrameParentWindow.ToSharedRef(), Target,
+					FPaths::GetPath(FPaths::GetPath(AbsoluteFilePathAndName)));
 
-			Target->UpdateWordCountsFromCSV();
-			Target->UpdateStatusFromConflictReport();
+				Target->UpdateWordCountsFromCSV();
+				Target->UpdateStatusFromConflictReport();
+				
+			}
+
 		}
 	}
 }

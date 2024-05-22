@@ -63,7 +63,7 @@ public:
 	
 private:
 	// Import
-
+	bool IsFileNotEmpty(const std::string& filePath);
 	void ImportAllCulturesForTargetFromGridly(TWeakObjectPtr<ULocalizationTarget> LocalizationTarget, bool bIsTargetSet);
 	void OnImportCultureForTargetFromGridly(const FLocalizationServiceOperationRef& Operation,
 		ELocalizationServiceOperationCommandResult::Type Result, bool bIsTargetSet);
