@@ -103,6 +103,7 @@ bool FGridlyLocalizedTextConverter::WritePoFile(const TArray<FPolyglotTextData>&
 	const FString& Path)
 {
 	TArray<FString> Lines;
+	int numOfLines = 0;
 
 	for (int i = 0; i < PolyglotTextDatas.Num(); i++)
 	{
@@ -126,11 +127,18 @@ bool FGridlyLocalizedTextConverter::WritePoFile(const TArray<FPolyglotTextData>&
 	if (FFileHelper::SaveStringArrayToFile(Lines, *Path))
 	{
 		UE_LOG(LogGridly, Log, TEXT("Exported .po file (%d lines): %s"), Lines.Num(), *Path);
+		if (Lines.Num() > 0) {
+			return true;
+		}
+		else {
+			return false;
+		}
 	}
 	else
 	{
 		UE_LOG(LogGridly, Error, TEXT("Failed to export .po file to path: %s"), *Path);
+		return false;
 	}
 
-	return false;
+	
 }

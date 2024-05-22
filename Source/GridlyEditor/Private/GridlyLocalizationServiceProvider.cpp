@@ -22,6 +22,8 @@
 #include "Serialization/JsonSerializer.h"
 #include "Styling/AppStyle.h"
 
+
+
 #if LOCALIZATION_SERVICES_WITH_SLATE
 #include "DetailCategoryBuilder.h"
 #include "DetailWidgetRow.h"
@@ -124,20 +126,22 @@ ELocalizationServiceOperationCommandResult::Type FGridlyLocalizationServiceProvi
 	UGridlyTask_DownloadLocalizedTexts* Task = UGridlyTask_DownloadLocalizedTexts::DownloadLocalizedTexts(nullptr);
 
 	// On success
-
 	Task->OnSuccessDelegate.BindLambda(
-		[DownloadOperation, InOperationCompleteDelegate, TargetCulture](const TArray<FPolyglotTextData>& PolyglotTextDatas)
+		[this, DownloadOperation, InOperationCompleteDelegate, TargetCulture](const TArray<FPolyglotTextData>& PolyglotTextDatas)
 		{
 			if (PolyglotTextDatas.Num() > 0)
 			{
 				const FString AbsoluteFilePathAndName = FPaths::ConvertRelativePathToFull(
 					FPaths::ProjectDir() / DownloadOperation->GetInRelativeOutputFilePathAndName());
 
-				FGridlyLocalizedTextConverter::WritePoFile(PolyglotTextDatas, TargetCulture, AbsoluteFilePathAndName);
+				// Convert FString to std::string for IsFileNotEmpty function
+				std::string filePath(TCHAR_TO_UTF8(*AbsoluteFilePathAndName));
+				bool writeProc = FGridlyLocalizedTextConverter::WritePoFile(PolyglotTextDatas, TargetCulture, AbsoluteFilePathAndName);
 
-				// Callback
-
-				InOperationCompleteDelegate.Execute(DownloadOperation, ELocalizationServiceOperationCommandResult::Succeeded);
+				if (writeProc) {
+					// Callback
+					InOperationCompleteDelegate.Execute(DownloadOperation, ELocalizationServiceOperationCommandResult::Succeeded);
+				}
 			}
 			else
 			{
@@ -147,10 +151,8 @@ ELocalizationServiceOperationCommandResult::Type FGridlyLocalizationServiceProvi
 		});
 
 	// On fail
-
 	Task->OnFailDelegate.BindLambda(
-		[DownloadOperation, InOperationCompleteDelegate](const TArray<FPolyglotTextData>& PolyglotTextDatas,
-		const FGridlyResult& Error)
+		[DownloadOperation, InOperationCompleteDelegate](const TArray<FPolyglotTextData>& PolyglotTextDatas, const FGridlyResult& Error)
 		{
 			DownloadOperation->SetOutErrorText(FText::FromString(Error.Message));
 			InOperationCompleteDelegate.Execute(DownloadOperation, ELocalizationServiceOperationCommandResult::Failed);
@@ -160,6 +162,8 @@ ELocalizationServiceOperationCommandResult::Type FGridlyLocalizationServiceProvi
 
 	return ELocalizationServiceOperationCommandResult::Succeeded;
 }
+
+
 
 bool FGridlyLocalizationServiceProvider::CanCancelOperation(
 	const TSharedRef<ILocalizationServiceOperation, ESPMode::ThreadSafe>& InOperation) const

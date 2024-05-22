@@ -8,6 +8,9 @@
 #include "ILocalizationServiceProvider.h"
 #include "ILocalizationServiceState.h"
 #include "Interfaces/IHttpRequest.h"
+#include <string>
+#include <fstream>
+#include <iostream>
 
 class FGridlyLocalizationServiceProvider final : public ILocalizationServiceProvider
 {
@@ -16,6 +19,7 @@ public:
 
 public:
 	/* ILocalizationServiceProvider implementation */
+
 
 	virtual void Init(bool bForceConnection = true) override;
 	virtual void Close() override;
