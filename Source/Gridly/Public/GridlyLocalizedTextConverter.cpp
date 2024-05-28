@@ -125,6 +125,7 @@ bool FGridlyLocalizedTextConverter::WritePoFile(const TArray<FPolyglotTextData>&
 			Lines.Add(TEXT(""));
          
         }
+        
         else {
             Lines.Add(FString::Printf(TEXT("msgctxt \"%s,%s\""), *PolyglotTextDatas[i].GetNamespace(),
                 *PolyglotTextDatas[i].GetKey()));
@@ -137,6 +138,7 @@ bool FGridlyLocalizedTextConverter::WritePoFile(const TArray<FPolyglotTextData>&
 
             Lines.Add(TEXT(""));
         }
+        
         
 	}
 

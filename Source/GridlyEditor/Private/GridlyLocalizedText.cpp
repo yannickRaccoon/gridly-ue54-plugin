@@ -91,7 +91,27 @@ bool FGridlyLocalizedText::GetAllTextAsPolyglotTextDatas(ULocalizationTarget* Lo
 					Context.KeyMetadataObj, ELocTextExportSourceMethod::NativeText, InManifestEntry->Source, TranslationText, true);
 
 				const FString SourceKey = Context.Key.GetString();
-				const FString SourceNamespace = InManifestEntry->Namespace.GetString();
+				FString SourceNamespace = InManifestEntry->Namespace.GetString();
+				if (SourceNamespace.IsEmpty())
+				{
+					// Extract substring from Context.SourceLocation
+					FString SourceLocation = Context.SourceLocation;
+					int32 LastSlashPos;
+					if (SourceLocation.FindLastChar('/', LastSlashPos))
+					{
+						int32 FirstDotPos = SourceLocation.Find(TEXT("."), ESearchCase::IgnoreCase, ESearchDir::FromStart, LastSlashPos);
+						if (FirstDotPos != INDEX_NONE && FirstDotPos > LastSlashPos)
+						{
+							SourceNamespace = SourceLocation.Mid(LastSlashPos + 1, FirstDotPos - LastSlashPos - 1);
+						}
+					}
+					else
+					{
+						// Handle case where extraction fails
+						SourceNamespace = "DefaultNamespace"; // Or any appropriate fallback
+					}
+				}
+
 				const FString SourceText = TranslationText.Text;
 
 				FPolyglotTextData PolyglotTextData(ELocalizedTextSourceCategory::Game, SourceNamespace, SourceKey, SourceText,
@@ -100,6 +120,8 @@ bool FGridlyLocalizedText::GetAllTextAsPolyglotTextDatas(ULocalizationTarget* Lo
 			}
 			return true;
 		}, true);
+
+
 
 	for (int i = 0; i < CulturesToGenerate.Num(); i++)
 	{
