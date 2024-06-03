@@ -39,7 +39,13 @@ bool FGridlyExporter::ConvertToJson(const TArray<FPolyglotTextData>& PolyglotTex
 
 		if (bUseCombinedNamespaceKey)
 		{
-			RowJsonObject->SetStringField("id", FString::Printf(TEXT("%s,%s"), *Namespace, *Key));
+			if (Namespace.Contains("blueprints/")) {
+				RowJsonObject->SetStringField("id", FString::Printf(TEXT("%s,%s"), "", *Key));
+			}
+			else {
+
+				RowJsonObject->SetStringField("id", FString::Printf(TEXT("%s,%s"), *Namespace, *Key));
+			}
 		}
 		else
 		{

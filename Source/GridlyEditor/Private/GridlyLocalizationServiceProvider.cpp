@@ -22,8 +22,6 @@
 #include "Serialization/JsonSerializer.h"
 #include "Styling/AppStyle.h"
 
-
-
 #if LOCALIZATION_SERVICES_WITH_SLATE
 #include "DetailCategoryBuilder.h"
 #include "DetailWidgetRow.h"
@@ -113,8 +111,6 @@ ELocalizationServiceOperationCommandResult::Type FGridlyLocalizationServiceProvi
 	return ELocalizationServiceOperationCommandResult::Succeeded;
 }
 
-DEFINE_LOG_CATEGORY_STATIC(LogGridlyLocalizationServiceProvider, Log, All);
-
 ELocalizationServiceOperationCommandResult::Type FGridlyLocalizationServiceProvider::Execute(
 	const TSharedRef<ILocalizationServiceOperation, ESPMode::ThreadSafe>& InOperation,
 	const TArray<FLocalizationServiceTranslationIdentifier>& InTranslationIds,
@@ -128,46 +124,42 @@ ELocalizationServiceOperationCommandResult::Type FGridlyLocalizationServiceProvi
 	UGridlyTask_DownloadLocalizedTexts* Task = UGridlyTask_DownloadLocalizedTexts::DownloadLocalizedTexts(nullptr);
 
 	// On success
+
 	Task->OnSuccessDelegate.BindLambda(
-		[this, DownloadOperation, InOperationCompleteDelegate, TargetCulture](const TArray<FPolyglotTextData>& PolyglotTextDatas)
+		[DownloadOperation, InOperationCompleteDelegate, TargetCulture](const TArray<FPolyglotTextData>& PolyglotTextDatas)
 		{
-			/*
 			if (PolyglotTextDatas.Num() > 0)
 			{
-			*/
 				const FString AbsoluteFilePathAndName = FPaths::ConvertRelativePathToFull(
 					FPaths::ProjectDir() / DownloadOperation->GetInRelativeOutputFilePathAndName());
 
-				bool writeProc = FGridlyLocalizedTextConverter::WritePoFile(PolyglotTextDatas, TargetCulture, AbsoluteFilePathAndName);
-					// Callback for successful write
-					InOperationCompleteDelegate.Execute(DownloadOperation, ELocalizationServiceOperationCommandResult::Succeeded);
-			/*
+				FGridlyLocalizedTextConverter::WritePoFile(PolyglotTextDatas, TargetCulture, AbsoluteFilePathAndName);
+
+				// Callback
+
+				InOperationCompleteDelegate.Execute(DownloadOperation, ELocalizationServiceOperationCommandResult::Succeeded);
 			}
 			else
 			{
-				// Handle parse failure
 				DownloadOperation->SetOutErrorText(LOCTEXT("GridlyErrorParse", "Failed to parse downloaded content"));
 				InOperationCompleteDelegate.Execute(DownloadOperation, ELocalizationServiceOperationCommandResult::Failed);
 			}
-			*/
 		});
 
 	// On fail
+
 	Task->OnFailDelegate.BindLambda(
-		[DownloadOperation, InOperationCompleteDelegate](const TArray<FPolyglotTextData>& PolyglotTextDatas, const FGridlyResult& Error)
+		[DownloadOperation, InOperationCompleteDelegate](const TArray<FPolyglotTextData>& PolyglotTextDatas,
+		const FGridlyResult& Error)
 		{
-			// Handle download failure
 			DownloadOperation->SetOutErrorText(FText::FromString(Error.Message));
 			InOperationCompleteDelegate.Execute(DownloadOperation, ELocalizationServiceOperationCommandResult::Failed);
 		});
 
-	// Activate the task
 	Task->Activate();
 
 	return ELocalizationServiceOperationCommandResult::Succeeded;
 }
-
-
 
 bool FGridlyLocalizationServiceProvider::CanCancelOperation(
 	const TSharedRef<ILocalizationServiceOperation, ESPMode::ThreadSafe>& InOperation) const
@@ -290,22 +282,9 @@ void FGridlyLocalizationServiceProvider::ImportAllCulturesForTargetFromGridly(
 			DownloadTargetFileOp->SetInLocale(CultureName);
 
 			FString Path = FPaths::ProjectSavedDir() / "Temp" / "Game" / LocalizationTarget->Settings.Name / CultureName /
-				LocalizationTarget->Settings.Name + ".po";
+			               LocalizationTarget->Settings.Name + ".po";
 			FPaths::MakePathRelativeTo(Path, *FPaths::ProjectDir());
 			DownloadTargetFileOp->SetInRelativeOutputFilePathAndName(Path);
-
-			// Check the file length and delete if it is empty
-			IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
-			if (PlatformFile.FileExists(*Path))
-			{
-				int64 FileSize = PlatformFile.FileSize(*Path);
-				if (FileSize <= 0)
-				{
-					PlatformFile.DeleteFile(*Path);
-					UE_LOG(LogGridlyLocalizationServiceProvider, Warning, TEXT("Deleted empty file: %s"), *Path);
-					continue;
-				}
-			}
 
 			auto OperationCompleteDelegate = FLocalizationServiceOperationComplete::CreateRaw(this,
 				&FGridlyLocalizationServiceProvider::OnImportCultureForTargetFromGridly, bIsTargetSet);
@@ -318,21 +297,6 @@ void FGridlyLocalizationServiceProvider::ImportAllCulturesForTargetFromGridly(
 
 		ImportAllCulturesForTargetFromGridlySlowTask.Reset();
 	}
-}
-
-bool FGridlyLocalizationServiceProvider::IsFileNotEmpty(const std::string& filePath)
-{
-	std::ifstream file(filePath, std::ios::binary);
-	if (!file)
-	{
-		UE_LOG(LogGridlyLocalizationServiceProvider, Error, TEXT("Error: Could not open file %s"), *FString(filePath.c_str()));
-		return false; // Or handle error as appropriate
-	}
-
-	// Check if the file is empty by attempting to read the first character
-	char c;
-	file >> std::noskipws >> c; // Don't skip whitespace
-	return file.good();
 }
 
 void FGridlyLocalizationServiceProvider::OnImportCultureForTargetFromGridly(const FLocalizationServiceOperationRef& Operation,
@@ -369,18 +333,11 @@ void FGridlyLocalizationServiceProvider::OnImportCultureForTargetFromGridly(cons
 		
 		if (!bIsTargetSet)
 		{
-			std::string StdPath(TCHAR_TO_UTF8(*AbsoluteFilePathAndName));
-			if (IsFileNotEmpty(StdPath)) {
-				UE_LOG(LogGridlyEditor, Log, TEXT("Error: File is empty %s"), *FString(StdPath.c_str()));
-				//here we call the gather
-				LocalizationCommandletTasks::ImportTextForTarget(MainFrameParentWindow.ToSharedRef(), Target,
-					FPaths::GetPath(FPaths::GetPath(AbsoluteFilePathAndName)));
+			LocalizationCommandletTasks::ImportTextForTarget(MainFrameParentWindow.ToSharedRef(), Target,
+				FPaths::GetPath(FPaths::GetPath(AbsoluteFilePathAndName)));
 
-				Target->UpdateWordCountsFromCSV();
-				Target->UpdateStatusFromConflictReport();
-				
-			}
-
+			Target->UpdateWordCountsFromCSV();
+			Target->UpdateStatusFromConflictReport();
 		}
 	}
 }
@@ -418,7 +375,7 @@ void FGridlyLocalizationServiceProvider::ExportNativeCultureForTargetToGridly(
 
 	const EAppReturnType::Type MessageReturn = FMessageDialog::Open(EAppMsgType::YesNo,
 		LOCTEXT("ConfirmText",
-			"This will overwrite your source strings on Gridly with the data in your UE53 project. Are you sure you wish to export?"));
+			"This will overwrite your source strings on Gridly with the data in your UE54 project. Are you sure you wish to export?"));
 
 	if (!bIsTargetSet && MessageReturn == EAppReturnType::Yes)
 	{
@@ -510,7 +467,7 @@ void FGridlyLocalizationServiceProvider::ExportTranslationsForTargetToGridly(TWe
 
 	const EAppReturnType::Type MessageReturn = FMessageDialog::Open(EAppMsgType::YesNo,
 		LOCTEXT("ConfirmText",
-			"This will overwrite all your source strings AND translations on Gridly with the data in your UE53 project. Are you sure you wish to export?"));
+			"This will overwrite all your source strings AND translations on Gridly with the data in your UE54 project. Are you sure you wish to export?"));
 
 	if (!bIsTargetSet && MessageReturn == EAppReturnType::Yes)
 	{

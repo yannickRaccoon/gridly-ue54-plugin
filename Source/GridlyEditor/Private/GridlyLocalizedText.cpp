@@ -80,8 +80,28 @@ bool FGridlyLocalizedText::GetAllTextAsPolyglotTextDatas(ULocalizationTarget* Lo
 			return false;
 		}
 	}
-
+	/*
 	LocTextHelper->EnumerateSourceTexts(
+		[&LocTextHelper, &OutPolyglotTextDatas, &NativeCulture](TSharedRef<FManifestEntry> InManifestEntry)
+		{
+			for (const FManifestContext& Context : InManifestEntry->Contexts)
+			{
+				FLocItem TranslationText;
+				LocTextHelper->GetRuntimeText(NativeCulture, InManifestEntry->Namespace, Context.Key,
+					Context.KeyMetadataObj, ELocTextExportSourceMethod::NativeText, InManifestEntry->Source, TranslationText, true);
+
+				const FString SourceKey = Context.Key.GetString();
+				const FString SourceNamespace = InManifestEntry->Namespace.GetString();
+				const FString SourceText = TranslationText.Text;
+
+				FPolyglotTextData PolyglotTextData(ELocalizedTextSourceCategory::Game, SourceNamespace, SourceKey, SourceText,
+					NativeCulture);
+				OutPolyglotTextDatas.Add(PolyglotTextData);
+			}
+			return true;
+		}, true);
+	*/
+		LocTextHelper->EnumerateSourceTexts(
 		[&LocTextHelper, &OutPolyglotTextDatas, &NativeCulture](TSharedRef<FManifestEntry> InManifestEntry)
 		{
 			for (const FManifestContext& Context : InManifestEntry->Contexts)
@@ -102,13 +122,13 @@ bool FGridlyLocalizedText::GetAllTextAsPolyglotTextDatas(ULocalizationTarget* Lo
 						int32 FirstDotPos = SourceLocation.Find(TEXT("."), ESearchCase::IgnoreCase, ESearchDir::FromStart, LastSlashPos);
 						if (FirstDotPos != INDEX_NONE && FirstDotPos > LastSlashPos)
 						{
-							SourceNamespace = SourceLocation.Mid(LastSlashPos + 1, FirstDotPos - LastSlashPos - 1);
+							SourceNamespace = "blueprints/" + SourceLocation.Mid(LastSlashPos + 1, FirstDotPos - LastSlashPos - 1);
 						}
 					}
 					else
 					{
 						// Handle case where extraction fails
-						SourceNamespace = "DefaultNamespace"; // Or any appropriate fallback
+						SourceNamespace = ""; // Or any appropriate fallback
 					}
 				}
 
@@ -120,7 +140,6 @@ bool FGridlyLocalizedText::GetAllTextAsPolyglotTextDatas(ULocalizationTarget* Lo
 			}
 			return true;
 		}, true);
-
 
 
 	for (int i = 0; i < CulturesToGenerate.Num(); i++)
