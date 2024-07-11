@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
 	"Version": 1,
-	"VersionName": "0.1.0",
+	"VersionName": "1.0.0",
 	"FriendlyName": "Gridly",
 	"Description": "The #1 spreadsheet for multi-language content. Bring your digital assets together and localize at speed",
 	"Category": "Localization",
@@ -12,7 +12,6 @@
 	"SupportURL": "",
 	"EngineVersion": "5.4.0",
 	"CanContainContent": false,
-	"IsBetaVersion": true,
 	"Installed": true,
 	"Modules": [
 		{
@@ -23,7 +22,9 @@
 				"Win64"
 			],
 			"AdditionalDependencies": [
-				"GridlyEditor"
+				"GridlyEditor",
+				"Engine",
+				"EditorScriptingUtilities"
 			]
 		},
 		{
@@ -33,6 +34,12 @@
 			"PlatformAllowList": [
 				"Win64"
 			]
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "EditorScriptingUtilities",
+			"Enabled": true
 		}
 	]
 }

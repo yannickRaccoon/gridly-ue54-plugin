@@ -80,28 +80,8 @@ bool FGridlyLocalizedText::GetAllTextAsPolyglotTextDatas(ULocalizationTarget* Lo
 			return false;
 		}
 	}
-	/*
+
 	LocTextHelper->EnumerateSourceTexts(
-		[&LocTextHelper, &OutPolyglotTextDatas, &NativeCulture](TSharedRef<FManifestEntry> InManifestEntry)
-		{
-			for (const FManifestContext& Context : InManifestEntry->Contexts)
-			{
-				FLocItem TranslationText;
-				LocTextHelper->GetRuntimeText(NativeCulture, InManifestEntry->Namespace, Context.Key,
-					Context.KeyMetadataObj, ELocTextExportSourceMethod::NativeText, InManifestEntry->Source, TranslationText, true);
-
-				const FString SourceKey = Context.Key.GetString();
-				const FString SourceNamespace = InManifestEntry->Namespace.GetString();
-				const FString SourceText = TranslationText.Text;
-
-				FPolyglotTextData PolyglotTextData(ELocalizedTextSourceCategory::Game, SourceNamespace, SourceKey, SourceText,
-					NativeCulture);
-				OutPolyglotTextDatas.Add(PolyglotTextData);
-			}
-			return true;
-		}, true);
-	*/
-		LocTextHelper->EnumerateSourceTexts(
 		[&LocTextHelper, &OutPolyglotTextDatas, &NativeCulture](TSharedRef<FManifestEntry> InManifestEntry)
 		{
 			for (const FManifestContext& Context : InManifestEntry->Contexts)
@@ -140,6 +120,7 @@ bool FGridlyLocalizedText::GetAllTextAsPolyglotTextDatas(ULocalizationTarget* Lo
 			}
 			return true;
 		}, true);
+
 
 
 	for (int i = 0; i < CulturesToGenerate.Num(); i++)

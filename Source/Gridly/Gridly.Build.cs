@@ -13,6 +13,7 @@ public class Gridly : ModuleRules
 			"Core",
             "Json",
             "HTTP"
+            
         });
 
 		PrivateDependencyModuleNames.AddRange(
@@ -25,7 +26,7 @@ public class Gridly : ModuleRules
 				"SlateCore",                
                 "Serialization",				
 				"JsonUtilities"
-			}
+            }
 			);
 
 		if (Target.bBuildEditor)

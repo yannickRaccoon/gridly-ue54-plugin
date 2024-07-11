@@ -21,6 +21,10 @@
 #include "Misc/ScopedSlowTask.h"
 #include "Serialization/JsonSerializer.h"
 #include "Styling/AppStyle.h"
+#include <filesystem>
+
+
+
 
 #if LOCALIZATION_SERVICES_WITH_SLATE
 #include "DetailCategoryBuilder.h"
@@ -111,6 +115,8 @@ ELocalizationServiceOperationCommandResult::Type FGridlyLocalizationServiceProvi
 	return ELocalizationServiceOperationCommandResult::Succeeded;
 }
 
+DEFINE_LOG_CATEGORY_STATIC(LogGridlyLocalizationServiceProvider, Log, All);
+
 ELocalizationServiceOperationCommandResult::Type FGridlyLocalizationServiceProvider::Execute(
 	const TSharedRef<ILocalizationServiceOperation, ESPMode::ThreadSafe>& InOperation,
 	const TArray<FLocalizationServiceTranslationIdentifier>& InTranslationIds,
@@ -124,42 +130,46 @@ ELocalizationServiceOperationCommandResult::Type FGridlyLocalizationServiceProvi
 	UGridlyTask_DownloadLocalizedTexts* Task = UGridlyTask_DownloadLocalizedTexts::DownloadLocalizedTexts(nullptr);
 
 	// On success
-
 	Task->OnSuccessDelegate.BindLambda(
-		[DownloadOperation, InOperationCompleteDelegate, TargetCulture](const TArray<FPolyglotTextData>& PolyglotTextDatas)
+		[this, DownloadOperation, InOperationCompleteDelegate, TargetCulture](const TArray<FPolyglotTextData>& PolyglotTextDatas)
 		{
+			/*
 			if (PolyglotTextDatas.Num() > 0)
 			{
+			*/
 				const FString AbsoluteFilePathAndName = FPaths::ConvertRelativePathToFull(
 					FPaths::ProjectDir() / DownloadOperation->GetInRelativeOutputFilePathAndName());
 
-				FGridlyLocalizedTextConverter::WritePoFile(PolyglotTextDatas, TargetCulture, AbsoluteFilePathAndName);
-
-				// Callback
-
-				InOperationCompleteDelegate.Execute(DownloadOperation, ELocalizationServiceOperationCommandResult::Succeeded);
+				bool writeProc = FGridlyLocalizedTextConverter::WritePoFile(PolyglotTextDatas, TargetCulture, AbsoluteFilePathAndName);
+					// Callback for successful write
+					InOperationCompleteDelegate.Execute(DownloadOperation, ELocalizationServiceOperationCommandResult::Succeeded);
+			/*
 			}
 			else
 			{
+				// Handle parse failure
 				DownloadOperation->SetOutErrorText(LOCTEXT("GridlyErrorParse", "Failed to parse downloaded content"));
 				InOperationCompleteDelegate.Execute(DownloadOperation, ELocalizationServiceOperationCommandResult::Failed);
 			}
+			*/
 		});
 
 	// On fail
-
 	Task->OnFailDelegate.BindLambda(
-		[DownloadOperation, InOperationCompleteDelegate](const TArray<FPolyglotTextData>& PolyglotTextDatas,
-		const FGridlyResult& Error)
+		[DownloadOperation, InOperationCompleteDelegate](const TArray<FPolyglotTextData>& PolyglotTextDatas, const FGridlyResult& Error)
 		{
+			// Handle download failure
 			DownloadOperation->SetOutErrorText(FText::FromString(Error.Message));
 			InOperationCompleteDelegate.Execute(DownloadOperation, ELocalizationServiceOperationCommandResult::Failed);
 		});
 
+	// Activate the task
 	Task->Activate();
 
 	return ELocalizationServiceOperationCommandResult::Succeeded;
 }
+
+
 
 bool FGridlyLocalizationServiceProvider::CanCancelOperation(
 	const TSharedRef<ILocalizationServiceOperation, ESPMode::ThreadSafe>& InOperation) const
@@ -282,9 +292,22 @@ void FGridlyLocalizationServiceProvider::ImportAllCulturesForTargetFromGridly(
 			DownloadTargetFileOp->SetInLocale(CultureName);
 
 			FString Path = FPaths::ProjectSavedDir() / "Temp" / "Game" / LocalizationTarget->Settings.Name / CultureName /
-			               LocalizationTarget->Settings.Name + ".po";
+				LocalizationTarget->Settings.Name + ".po";
 			FPaths::MakePathRelativeTo(Path, *FPaths::ProjectDir());
 			DownloadTargetFileOp->SetInRelativeOutputFilePathAndName(Path);
+
+			// Check the file length and delete if it is empty
+			IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
+			if (PlatformFile.FileExists(*Path))
+			{
+				int64 FileSize = PlatformFile.FileSize(*Path);
+				if (FileSize <= 0)
+				{
+					PlatformFile.DeleteFile(*Path);
+					UE_LOG(LogGridlyLocalizationServiceProvider, Warning, TEXT("Deleted empty file: %s"), *Path);
+					continue;
+				}
+			}
 
 			auto OperationCompleteDelegate = FLocalizationServiceOperationComplete::CreateRaw(this,
 				&FGridlyLocalizationServiceProvider::OnImportCultureForTargetFromGridly, bIsTargetSet);
@@ -298,6 +321,10 @@ void FGridlyLocalizationServiceProvider::ImportAllCulturesForTargetFromGridly(
 		ImportAllCulturesForTargetFromGridlySlowTask.Reset();
 	}
 }
+
+
+
+
 
 void FGridlyLocalizationServiceProvider::OnImportCultureForTargetFromGridly(const FLocalizationServiceOperationRef& Operation,
 	ELocalizationServiceOperationCommandResult::Type Result, bool bIsTargetSet)
@@ -333,11 +360,16 @@ void FGridlyLocalizationServiceProvider::OnImportCultureForTargetFromGridly(cons
 		
 		if (!bIsTargetSet)
 		{
-			LocalizationCommandletTasks::ImportTextForTarget(MainFrameParentWindow.ToSharedRef(), Target,
-				FPaths::GetPath(FPaths::GetPath(AbsoluteFilePathAndName)));
 
-			Target->UpdateWordCountsFromCSV();
-			Target->UpdateStatusFromConflictReport();
+				//here we call the gather
+				LocalizationCommandletTasks::ImportTextForTarget(MainFrameParentWindow.ToSharedRef(), Target,
+					FPaths::GetPath(FPaths::GetPath(AbsoluteFilePathAndName)));
+
+				Target->UpdateWordCountsFromCSV();
+				Target->UpdateStatusFromConflictReport();
+				
+			
+
 		}
 	}
 }

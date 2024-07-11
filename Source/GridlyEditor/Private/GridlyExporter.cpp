@@ -39,14 +39,15 @@ bool FGridlyExporter::ConvertToJson(const TArray<FPolyglotTextData>& PolyglotTex
 
 		if (bUseCombinedNamespaceKey)
 		{
-			if (Namespace.Contains("blueprints/")) {
-				RowJsonObject->SetStringField("id", FString::Printf(TEXT("%s,%s"), "", *Key));
+			// Use Contains method to check for the substring "blueprints/"
+			if (Namespace.Contains(TEXT("blueprints/"))) {
+				RowJsonObject->SetStringField("id", FString::Printf(TEXT("%s,%s"), TEXT(""), *Key));
 			}
 			else {
-
 				RowJsonObject->SetStringField("id", FString::Printf(TEXT("%s,%s"), *Namespace, *Key));
 			}
 		}
+
 		else
 		{
 			RowJsonObject->SetStringField("id", Key);
@@ -97,7 +98,7 @@ bool FGridlyExporter::ConvertToJson(const TArray<FPolyglotTextData>& PolyglotTex
 
 			// Add metadata
 
-			if (ItemContext && GameSettings->bExportMetadata && ItemContext->InfoMetadataObj.IsValid())
+ 			if (ItemContext && GameSettings->bExportMetadata && ItemContext->InfoMetadataObj.IsValid())
 			{
 				for (const auto& InfoMetaDataPair : ItemContext->InfoMetadataObj->Values)
 				{
