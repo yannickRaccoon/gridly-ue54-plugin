@@ -42,7 +42,7 @@ public:
     TArray<FString> ImportFromViewIds;
 
     /** The max amount of records to import on each request. This should normally be set to the API limit */
-    UPROPERTY(Category = "Gridly|Import Settings|Advanced", BlueprintReadOnly, EditAnywhere, Config)
+    UPROPERTY(Category = "Gridly|Import Settings|Advanced", BlueprintReadOnly, EditAnywhere, Config, meta = (ClampMin = "1", ClampMax = "1000"))
     int ImportMaxRecordsPerRequest = 1000;
 
     /** The API key can be retrieved from your Gridly dashboard. Make sure you have write access */
@@ -54,7 +54,7 @@ public:
     FString ExportViewId;
 
     /** The max amount of records to export on each request. This should normally be set to the API limit */
-    UPROPERTY(Category = "Gridly|Export Settings|Advanced", BlueprintReadOnly, EditAnywhere, Config)
+    UPROPERTY(Category = "Gridly|Export Settings|Advanced", BlueprintReadOnly, EditAnywhere, Config, meta = (ClampMin = "1", ClampMax = "1000"))
     int ExportMaxRecordsPerRequest = 1000;
 
     /** Use combined comma-separated "{namespace},{key}" as record ID. WARNING! This should not be changed after a project has already been exported */
@@ -100,6 +100,10 @@ public:
     /** When set, metadata will also be exported to Gridly */
     UPROPERTY(Category = "Gridly|Options", BlueprintReadOnly, EditAnywhere, Config)
     bool bExportMetadata = false;
+
+    /** When set, the recoprds that has deleted in UE, will be deleted in Gridly */
+    UPROPERTY(Category = "Gridly|Options", BlueprintReadOnly, EditAnywhere, Config)
+    bool bSyncRecords = true;
 
     /** This will remap metadata to specific Gridly columns during the export */
     UPROPERTY(Category = "Gridly|Options", BlueprintReadOnly, EditAnywhere, Config, meta = (EditCondition = "bExportMetadata"))

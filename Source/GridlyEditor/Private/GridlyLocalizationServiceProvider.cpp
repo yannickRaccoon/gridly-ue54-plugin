@@ -137,12 +137,12 @@ ELocalizationServiceOperationCommandResult::Type FGridlyLocalizationServiceProvi
 			if (PolyglotTextDatas.Num() > 0)
 			{
 			*/
-				const FString AbsoluteFilePathAndName = FPaths::ConvertRelativePathToFull(
-					FPaths::ProjectDir() / DownloadOperation->GetInRelativeOutputFilePathAndName());
+			const FString AbsoluteFilePathAndName = FPaths::ConvertRelativePathToFull(
+				FPaths::ProjectDir() / DownloadOperation->GetInRelativeOutputFilePathAndName());
 
-				bool writeProc = FGridlyLocalizedTextConverter::WritePoFile(PolyglotTextDatas, TargetCulture, AbsoluteFilePathAndName);
-					// Callback for successful write
-					InOperationCompleteDelegate.Execute(DownloadOperation, ELocalizationServiceOperationCommandResult::Succeeded);
+			bool writeProc = FGridlyLocalizedTextConverter::WritePoFile(PolyglotTextDatas, TargetCulture, AbsoluteFilePathAndName);
+			// Callback for successful write
+			InOperationCompleteDelegate.Execute(DownloadOperation, ELocalizationServiceOperationCommandResult::Succeeded);
 			/*
 			}
 			else
@@ -357,18 +357,18 @@ void FGridlyLocalizationServiceProvider::OnImportCultureForTargetFromGridly(cons
 
 		IMainFrameModule& MainFrameModule = FModuleManager::LoadModuleChecked<IMainFrameModule>(TEXT("MainFrame"));
 		const TSharedPtr<SWindow>& MainFrameParentWindow = MainFrameModule.GetParentWindow();
-		
+
 		if (!bIsTargetSet)
 		{
 
-				//here we call the gather
-				LocalizationCommandletTasks::ImportTextForTarget(MainFrameParentWindow.ToSharedRef(), Target,
-					FPaths::GetPath(FPaths::GetPath(AbsoluteFilePathAndName)));
+			//here we call the gather
+			LocalizationCommandletTasks::ImportTextForTarget(MainFrameParentWindow.ToSharedRef(), Target,
+				FPaths::GetPath(FPaths::GetPath(AbsoluteFilePathAndName)));
 
-				Target->UpdateWordCountsFromCSV();
-				Target->UpdateStatusFromConflictReport();
-				
-			
+			Target->UpdateWordCountsFromCSV();
+			Target->UpdateStatusFromConflictReport();
+
+
 
 		}
 	}
@@ -425,50 +425,56 @@ void FGridlyLocalizationServiceProvider::ExportNativeCultureForTargetToGridly(
 	}
 }
 
-void FGridlyLocalizationServiceProvider::OnExportNativeCultureForTargetToGridly(FHttpRequestPtr HttpRequestPtr,
-	FHttpResponsePtr HttpResponsePtr, bool bSuccess)
+void FGridlyLocalizationServiceProvider::OnExportNativeCultureForTargetToGridly(FHttpRequestPtr HttpRequestPtr, FHttpResponsePtr HttpResponsePtr, bool bSuccess)
 {
+	UGridlyGameSettings* GameSettings = GetMutableDefault<UGridlyGameSettings>();
+
+	const bool bSyncRecords = GameSettings->bSyncRecords;
 	if (bSuccess)
 	{
-		if (HttpResponsePtr->GetResponseCode() == EHttpResponseCodes::Ok ||
-		    HttpResponsePtr->GetResponseCode() == EHttpResponseCodes::Created)
+		if (HttpResponsePtr->GetResponseCode() == EHttpResponseCodes::Ok || HttpResponsePtr->GetResponseCode() == EHttpResponseCodes::Created)
 		{
+			// Success: process the response and log the result
 			const FString Content = HttpResponsePtr->GetContentAsString();
 			const auto JsonStringReader = TJsonReaderFactory<TCHAR>::Create(Content);
 			TArray<TSharedPtr<FJsonValue>> JsonValueArray;
 			FJsonSerializer::Deserialize(JsonStringReader, JsonValueArray);
 			ExportForTargetEntriesUpdated += JsonValueArray.Num();
 
-			if (!IsRunningCommandlet())
-			{
-				ExportForTargetToGridlySlowTask->EnterProgressFrame(1.f);
-			}
+			// Continue processing or log success...
 
-			TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> HttpRequest;
-			if (ExportFromTargetRequestQueue.Dequeue(HttpRequest))
+			// Check if more requests are pending
+			TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> NextRequest;
+			if (ExportFromTargetRequestQueue.Dequeue(NextRequest))
 			{
-				HttpRequest->ProcessRequest();
+				NextRequest->ProcessRequest();
 			}
 			else
 			{
-				const FString Message = FString::Printf(TEXT("Number of entries updated: %llu"),
-					ExportForTargetEntriesUpdated);
-				UE_LOG(LogGridlyEditor, Log, TEXT("%s"), *Message);
+				// Call FetchGridlyCSV here after all export operations are done
+				if (bSyncRecords) {
+					FetchGridlyCSV();
+				}
 
 				if (!IsRunningCommandlet())
 				{
+					FString Message = FString::Printf(TEXT("Number of entries updated: %llu"),
+						ExportForTargetEntriesUpdated);  // Include deleted records
+
+					UE_LOG(LogGridlyEditor, Log, TEXT("%s"), *Message);
 					FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(Message));
 					ExportForTargetToGridlySlowTask.Reset();
 				}
 
 				bExportRequestInProgress = false;
+				
 			}
 		}
 		else
 		{
+			// Handle HTTP error
 			const FString Content = HttpResponsePtr->GetContentAsString();
-			const FString ErrorReason =
-				FString::Printf(TEXT("Error: %d, reason: %s"), HttpResponsePtr->GetResponseCode(), *Content);
+			const FString ErrorReason = FString::Printf(TEXT("Error: %d, reason: %s"), HttpResponsePtr->GetResponseCode(), *Content);
 			UE_LOG(LogGridlyEditor, Error, TEXT("%s"), *ErrorReason);
 
 			if (!IsRunningCommandlet())
@@ -482,6 +488,7 @@ void FGridlyLocalizationServiceProvider::OnExportNativeCultureForTargetToGridly(
 	}
 	else
 	{
+		// Handle failure
 		if (!IsRunningCommandlet())
 		{
 			FMessageDialog::Open(EAppMsgType::Ok, LOCTEXT("GridlyConnectionError", "ERROR: Unable to connect to Gridly"));
@@ -490,12 +497,16 @@ void FGridlyLocalizationServiceProvider::OnExportNativeCultureForTargetToGridly(
 
 		bExportRequestInProgress = false;
 	}
+	
 }
+
 
 void FGridlyLocalizationServiceProvider::ExportTranslationsForTargetToGridly(TWeakObjectPtr<ULocalizationTarget> LocalizationTarget,
 	bool bIsTargetSet)
 {
 	check(LocalizationTarget.IsValid());
+	UERecords.Empty();
+	GridlyRecords.Empty();
 
 	const EAppReturnType::Type MessageReturn = FMessageDialog::Open(EAppMsgType::YesNo,
 		LOCTEXT("ConfirmText",
@@ -510,41 +521,38 @@ void FGridlyLocalizationServiceProvider::ExportTranslationsForTargetToGridly(TWe
 				&FGridlyLocalizationServiceProvider::OnExportTranslationsForTargetToGridly);
 
 			const FText SlowTaskText = LOCTEXT("ExportTranslationsForTargetToGridlyText",
-					"Exporting source text and translations for target to Gridly");
+				"Exporting source text and translations for target to Gridly");
 
 			ExportForTargetToGridly(InLocalizationTarget, ReqDelegate, SlowTaskText, true);
 		}
 	}
 }
 
-void FGridlyLocalizationServiceProvider::OnExportTranslationsForTargetToGridly(FHttpRequestPtr HttpRequestPtr,
-	FHttpResponsePtr HttpResponsePtr, bool bSuccess)
+void FGridlyLocalizationServiceProvider::OnExportTranslationsForTargetToGridly(FHttpRequestPtr HttpRequestPtr, FHttpResponsePtr HttpResponsePtr, bool bSuccess)
 {
 	if (bSuccess)
 	{
-		if (HttpResponsePtr->GetResponseCode() == EHttpResponseCodes::Ok ||
-		    HttpResponsePtr->GetResponseCode() == EHttpResponseCodes::Created)
+		if (HttpResponsePtr->GetResponseCode() == EHttpResponseCodes::Ok || HttpResponsePtr->GetResponseCode() == EHttpResponseCodes::Created)
 		{
+			// Success: process the response
 			const FString Content = HttpResponsePtr->GetContentAsString();
 			const auto JsonStringReader = TJsonReaderFactory<TCHAR>::Create(Content);
 			TArray<TSharedPtr<FJsonValue>> JsonValueArray;
 			FJsonSerializer::Deserialize(JsonStringReader, JsonValueArray);
 			ExportForTargetEntriesUpdated += JsonValueArray.Num();
 
-			if (!IsRunningCommandlet())
-			{
-				ExportForTargetToGridlySlowTask->EnterProgressFrame(1.f);
-			}
+			// Continue processing or log success...
 
-			TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> HttpRequest;
-			if (ExportFromTargetRequestQueue.Dequeue(HttpRequest))
+			// Check if more requests are pending
+			TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> NextRequest;
+			if (ExportFromTargetRequestQueue.Dequeue(NextRequest))
 			{
-				HttpRequest->ProcessRequest();
+				NextRequest->ProcessRequest();
 			}
 			else
 			{
-				const FString Message = FString::Printf(TEXT("Number of entries updated: %llu"),
-					ExportForTargetEntriesUpdated);
+				// All export operations completed
+				const FString Message = FString::Printf(TEXT("Number of entries updated: %llu"), ExportForTargetEntriesUpdated);
 				UE_LOG(LogGridlyEditor, Log, TEXT("%s"), *Message);
 
 				if (!IsRunningCommandlet())
@@ -554,13 +562,16 @@ void FGridlyLocalizationServiceProvider::OnExportTranslationsForTargetToGridly(F
 				}
 
 				bExportRequestInProgress = false;
+
+				// Call FetchGridlyCSV here after all export operations are done
+				FetchGridlyCSV();
 			}
 		}
 		else
 		{
+			// Handle HTTP error
 			const FString Content = HttpResponsePtr->GetContentAsString();
-			const FString ErrorReason =
-				FString::Printf(TEXT("Error: %d, reason: %s"), HttpResponsePtr->GetResponseCode(), *Content);
+			const FString ErrorReason = FString::Printf(TEXT("Error: %d, reason: %s"), HttpResponsePtr->GetResponseCode(), *Content);
 			UE_LOG(LogGridlyEditor, Error, TEXT("%s"), *ErrorReason);
 
 			if (!IsRunningCommandlet())
@@ -574,6 +585,7 @@ void FGridlyLocalizationServiceProvider::OnExportTranslationsForTargetToGridly(F
 	}
 	else
 	{
+		// Handle failure
 		if (!IsRunningCommandlet())
 		{
 			FMessageDialog::Open(EAppMsgType::Ok, LOCTEXT("GridlyConnectionError", "ERROR: Unable to connect to Gridly"));
@@ -584,10 +596,15 @@ void FGridlyLocalizationServiceProvider::OnExportTranslationsForTargetToGridly(F
 	}
 }
 
+
 void FGridlyLocalizationServiceProvider::ExportForTargetToGridly(ULocalizationTarget* InLocalizationTarget, FHttpRequestCompleteDelegate& ReqDelegate, const FText& SlowTaskText, bool bIncTargetTranslation)
 {
 	TArray<FPolyglotTextData> PolyglotTextDatas;
 	TSharedPtr<FLocTextHelper> LocTextHelperPtr;
+	UERecords.Empty();
+	GridlyRecords.Empty();
+
+
 	if (FGridlyLocalizedText::GetAllTextAsPolyglotTextDatas(InLocalizationTarget, PolyglotTextDatas, LocTextHelperPtr))
 	{
 		size_t TotalRequests = 0;
@@ -600,6 +617,14 @@ void FGridlyLocalizationServiceProvider::ExportForTargetToGridly(ULocalizationTa
 			const auto HttpRequest = CreateExportRequest(ChunkPolyglotTextDatas, LocTextHelperPtr, bIncTargetTranslation);
 			HttpRequest->OnProcessRequestComplete() = ReqDelegate;
 			ExportFromTargetRequestQueue.Enqueue(HttpRequest);
+			for (int i = 0; i < ChunkPolyglotTextDatas.Num(); i++)
+			{
+				const FString& Key = ChunkPolyglotTextDatas[i].GetKey();  // Access the correct array
+				const FString& Namespace = ChunkPolyglotTextDatas[i].GetNamespace();  // Access the correct array
+				
+				UERecords.Add(FGridlyTypeRecord(Key, Namespace));
+			}
+
 			TotalRequests++;
 		}
 
@@ -629,5 +654,441 @@ FHttpRequestCompleteDelegate FGridlyLocalizationServiceProvider::CreateExportNat
 {
 	return FHttpRequestCompleteDelegate::CreateRaw(this, &FGridlyLocalizationServiceProvider::OnExportNativeCultureForTargetToGridly);
 }
+
+void FGridlyLocalizationServiceProvider::FetchGridlyCSV()
+{
+	const UGridlyGameSettings* GameSettings = GetMutableDefault<UGridlyGameSettings>();
+	const FString ApiKey = GameSettings->ExportApiKey;
+	const FString ViewId = GameSettings->ExportViewId;
+	// URL for fetching the CSV from Gridly
+	FStringFormatNamedArguments Args;
+	Args.Add(TEXT("ViewId"), *ViewId);
+	const FString GridlyURL = FString::Format(TEXT("https://api.gridly.com/v1/views/{ViewId}/export"), Args);
+
+	// Create the HTTP request
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = FHttpModule::Get().CreateRequest();
+	HttpRequest->SetVerb(TEXT("GET"));
+	HttpRequest->SetURL(GridlyURL);
+
+	// Set the required headers, including the authorization
+	HttpRequest->SetHeader(TEXT("Authorization"), FString::Printf(TEXT("ApiKey %s"), *ApiKey));
+	HttpRequest->SetHeader(TEXT("Accept"), TEXT("text/csv"));
+
+	// Bind a callback to handle the response
+	HttpRequest->OnProcessRequestComplete().BindRaw(this, &FGridlyLocalizationServiceProvider::OnGridlyCSVResponseReceived);
+
+	// Send the request
+	HttpRequest->ProcessRequest();
+}
+
+void FGridlyLocalizationServiceProvider::OnGridlyCSVResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
+{
+	if (!bWasSuccessful || !Response.IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("Failed to fetch Gridly CSV"));
+		return;
+	}
+
+	// Retrieve the response content (CSV data)
+	FString CSVContent = Response->GetContentAsString();
+
+	// Parse the CSV data to extract records
+	ParseCSVAndCreateRecords(CSVContent);
+}
+
+
+void FGridlyLocalizationServiceProvider::ParseCSVAndCreateRecords(const FString& CSVContent)
+{
+	const TCHAR QuoteChar = TEXT('"');
+	const TCHAR Delimiter = TEXT(',');
+
+	bool bInsideQuotes = false;
+	FString CurrentField;
+	TArray<FString> Fields;
+	FString CurrentLine;
+
+	// Buffer to store the accumulated lines in case of multi-line records
+	TArray<FString> AccumulatedLines;
+
+	int32 RecordIdColumnIndex = -1;
+	int32 PathColumnIndex = -1;
+
+	// First pass: determine which columns contain the Record ID and Path
+	bool bFoundHeader = false;
+	for (int32 i = 0; i < CSVContent.Len(); ++i)
+	{
+		TCHAR Char = CSVContent[i];
+
+		if (bInsideQuotes)
+		{
+			if (Char == QuoteChar)
+			{
+				if (i + 1 < CSVContent.Len() && CSVContent[i + 1] == QuoteChar)
+				{
+					CurrentField += QuoteChar;
+					++i;
+				}
+				else
+				{
+					bInsideQuotes = false;
+				}
+			}
+			else
+			{
+				CurrentField += Char;
+			}
+		}
+		else
+		{
+			if (Char == QuoteChar)
+			{
+				bInsideQuotes = true;
+			}
+			else if (Char == Delimiter)
+			{
+				Fields.Add(CurrentField);
+				CurrentField.Empty();
+			}
+			else if (Char == '\n' || Char == '\r')
+			{
+				// End of header line, process the column headers
+				if (Fields.Num() > 0 || !CurrentField.IsEmpty())
+				{
+					Fields.Add(CurrentField);
+					CurrentField.Empty();
+				}
+
+				if (!bFoundHeader)
+				{
+					for (int32 ColumnIndex = 0; ColumnIndex < Fields.Num(); ++ColumnIndex)
+					{
+						FString ColumnName = Fields[ColumnIndex].TrimQuotes();
+
+						if (ColumnName.Equals(TEXT("Record ID"), ESearchCase::IgnoreCase))
+						{
+							RecordIdColumnIndex = ColumnIndex;
+						}
+						else if (ColumnName.Equals(TEXT("Path"), ESearchCase::IgnoreCase))
+						{
+							PathColumnIndex = ColumnIndex;
+						}
+					}
+
+					bFoundHeader = true;
+					Fields.Empty();
+				}
+			}
+			else
+			{
+				CurrentField += Char;
+			}
+		}
+	}
+
+	// Check if we found both necessary columns
+	if (RecordIdColumnIndex == -1 || PathColumnIndex == -1)
+	{
+		UE_LOG(LogTemp, Error, TEXT("Failed to identify Record ID or Path columns in CSV."));
+		return;
+	}
+
+	// Second pass: parse the actual records
+	bInsideQuotes = false;
+	Fields.Empty();
+	CurrentField.Empty();
+	for (int32 i = 0; i < CSVContent.Len(); ++i)
+	{
+		TCHAR Char = CSVContent[i];
+
+		if (bInsideQuotes)
+		{
+			if (Char == QuoteChar)
+			{
+				if (i + 1 < CSVContent.Len() && CSVContent[i + 1] == QuoteChar)
+				{
+					CurrentField += QuoteChar;
+					++i;
+				}
+				else
+				{
+					bInsideQuotes = false;
+				}
+			}
+			else
+			{
+				CurrentField += Char;
+			}
+		}
+		else
+		{
+			if (Char == QuoteChar)
+			{
+				bInsideQuotes = true;
+			}
+			else if (Char == Delimiter)
+			{
+				Fields.Add(CurrentField);
+				CurrentField.Empty();
+			}
+			else if (Char == '\n' || Char == '\r')
+			{
+				if (Fields.Num() > 0 || !CurrentField.IsEmpty())
+				{
+					Fields.Add(CurrentField);
+					CurrentField.Empty();
+				}
+
+				if (Fields.Num() > FMath::Max(RecordIdColumnIndex, PathColumnIndex))
+				{
+					FString RecordId = Fields[RecordIdColumnIndex].TrimQuotes();
+					FString Path = Fields[PathColumnIndex].TrimQuotes();
+
+
+					FGridlyTypeRecord NewRecord(RemoveNamespaceFromKey(RecordId), Path);
+
+					if (NewRecord.Id != "Record ID") {
+						GridlyRecords.Add(NewRecord);
+					}
+				}
+
+				Fields.Empty();
+			}
+			else
+			{
+				CurrentField += Char;
+			}
+		}
+	}
+
+	// Handle the last line if needed
+	if (Fields.Num() > 0 || !CurrentField.IsEmpty())
+	{
+		Fields.Add(CurrentField);
+		if (Fields.Num() > FMath::Max(RecordIdColumnIndex, PathColumnIndex))
+		{
+			FString RecordId = Fields[RecordIdColumnIndex].TrimQuotes();
+			FString Path = Fields[PathColumnIndex].TrimQuotes();
+
+
+			FGridlyTypeRecord NewRecord(RemoveNamespaceFromKey(RecordId), Path);
+
+			if (NewRecord.Id != "Record ID") {
+				GridlyRecords.Add(NewRecord);
+			}
+		}
+	}
+
+	for (const FGridlyTypeRecord& Record : UERecords)
+	{
+		UE_LOG(LogTemp, Log, TEXT("UE Record ID: %s, Path: %s"), *Record.Id, *Record.Path);
+	}
+	
+
+	// Log or further process the GridlyRecords array
+	for (const FGridlyTypeRecord& Record : GridlyRecords)
+	{
+		UE_LOG(LogTemp, Log, TEXT("Gridly Record ID: %s, Path: %s"), *Record.Id, *Record.Path);
+	}
+
+	TArray<FString> RecordsToDelete;
+	
+
+	for (const FGridlyTypeRecord& GridlyRecord : GridlyRecords)
+	{
+		// Check if any UERecord has a matching path first
+		bool PathFoundInUE = false;
+		bool RecordIdFoundInUE = false;
+
+		for (const FGridlyTypeRecord& UERecord : UERecords)
+		{
+			if (GridlyRecord.Path == UERecord.Path)
+			{
+				PathFoundInUE = true; // The path matches
+				if (GridlyRecord.Id == UERecord.Id)
+				{
+					RecordIdFoundInUE = true; // The record ID matches as well for the same path
+					break; // Both path and record ID match, no need to continue searching
+				}
+			}
+		}
+
+		// If path is found but ID is not found for that path, or if path isn't found at all
+		if (!RecordIdFoundInUE)
+		{
+			UE_LOG(LogGridlyLocalizationServiceProvider, Log, TEXT("No match found for GridlyRecord: ID = %s, Path = %s. Adding to delete list."), *GridlyRecord.Id, *GridlyRecord.Path);
+
+			// If the path is empty, we only add the record ID
+			if (GridlyRecord.Path.Len() == 0)
+			{
+				RecordsToDelete.Add(GridlyRecord.Id);
+				continue;
+			}
+
+			// If the path starts with "blueprints/", add the ID with a comma prefix
+			if (GridlyRecord.Path.StartsWith(TEXT("blueprints/")))
+			{
+				RecordsToDelete.Add("," + GridlyRecord.Id);
+				continue;
+			}
+			else
+			{
+				// Otherwise, add the path and ID combination
+				RecordsToDelete.Add(GridlyRecord.Path + "," + GridlyRecord.Id);
+				continue;
+			}
+		}
+	}
+
+
+	
+
+	UE_LOG(LogGridlyLocalizationServiceProvider, Log, TEXT("Number of Gridly records: %d"), GridlyRecords.Num());
+	UE_LOG(LogGridlyLocalizationServiceProvider, Log, TEXT("Number of UE records: %d"), UERecords.Num());
+
+
+	// Optionally, pass this list for further processing
+	DeleteRecordsFromGridly(RecordsToDelete);
+}
+
+void FGridlyLocalizationServiceProvider::DeleteRecordsFromGridly(const TArray<FString>& RecordsToDelete)
+{
+	const int32 MaxRecordsPerRequest = 1000;  // Maximum number of records per batch
+
+	if (RecordsToDelete.Num() == 0)
+	{
+		UE_LOG(LogGridlyLocalizationServiceProvider, Warning, TEXT("No records to delete."));
+		return;
+	}
+	// Initialize the counters
+	CompletedBatches = 0;  // Reset the counter for completed batches
+	TotalBatchesToProcess = FMath::CeilToInt(static_cast<float>(RecordsToDelete.Num()) / MaxRecordsPerRequest);
+
+
+	// Split the records into batches of MaxRecordsPerRequest
+	int32 TotalRecords = RecordsToDelete.Num();
+	int32 TotalBatches = FMath::CeilToInt(static_cast<float>(TotalRecords) / MaxRecordsPerRequest);
+	CompletedBatches = 0;  // Initialize the completed batch counter
+	TotalBatchesToProcess = TotalBatches;  // Track the total number of batches
+
+	for (int32 BatchIndex = 0; BatchIndex < TotalBatches; BatchIndex++)
+	{
+		// Create a new array for each batch
+		TArray<FString> BatchRecords;
+
+		int32 StartIndex = BatchIndex * MaxRecordsPerRequest;
+		int32 EndIndex = FMath::Min(StartIndex + MaxRecordsPerRequest, TotalRecords); // Ensure not to exceed total records
+
+		// Manually append the batch records
+		for (int32 i = StartIndex; i < EndIndex; ++i)
+		{
+			BatchRecords.Add(RecordsToDelete[i]);
+		}
+
+		// Convert the batch to JSON and send the request
+		FString JsonPayload;
+		TSharedPtr<FJsonObject> JsonObject = MakeShared<FJsonObject>();
+		TArray<TSharedPtr<FJsonValue>> JsonIds;
+
+		for (const FString& RecordId : BatchRecords)
+		{
+			JsonIds.Add(MakeShared<FJsonValueString>(RecordId));
+		}
+
+		JsonObject->SetArrayField(TEXT("ids"), JsonIds);
+
+		TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&JsonPayload);
+		FJsonSerializer::Serialize(JsonObject.ToSharedRef(), Writer);
+
+		// Log the JSON payload for debugging
+		UE_LOG(LogGridlyLocalizationServiceProvider, Log, TEXT("JSON Payload: %s"), *JsonPayload);
+
+		const UGridlyGameSettings* GameSettings = GetMutableDefault<UGridlyGameSettings>();
+		const FString ApiKey = GameSettings->ExportApiKey;
+		const FString ViewId = GameSettings->ExportViewId;
+
+		FStringFormatNamedArguments Args;
+		Args.Add(TEXT("ViewId"), *ViewId);
+		const FString Url = FString::Format(TEXT("https://api.gridly.com/v1/views/{ViewId}/records"), Args);
+
+		TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = FHttpModule::Get().CreateRequest();
+		HttpRequest->SetVerb(TEXT("DELETE"));
+		HttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
+		HttpRequest->SetHeader(TEXT("Authorization"), FString::Printf(TEXT("ApiKey %s"), *ApiKey));
+		HttpRequest->SetURL(Url);
+		HttpRequest->SetContentAsString(JsonPayload);
+
+		// Bind the response handler for each batch
+		HttpRequest->OnProcessRequestComplete().BindRaw(this, &FGridlyLocalizationServiceProvider::OnDeleteRecordsResponse);
+
+		HttpRequest->ProcessRequest();
+
+		// Track the number of records requested for deletion
+		ExportForTargetEntriesDeleted += BatchRecords.Num();
+
+		UE_LOG(LogGridlyLocalizationServiceProvider, Log, TEXT("Delete request sent for %d records."), BatchRecords.Num());
+	}
+}
+
+void FGridlyLocalizationServiceProvider::OnDeleteRecordsResponse(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
+{
+	if (!Request.IsValid() || !Response.IsValid())
+	{
+		UE_LOG(LogGridlyLocalizationServiceProvider, Error, TEXT("Invalid HTTP request or response."));
+		FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(TEXT("Invalid HTTP request or response.")));
+		return;
+	}
+
+	// Increment the completed batch counter
+	CompletedBatches++;
+
+	if (bWasSuccessful && Response->GetResponseCode() == EHttpResponseCodes::NoContent)
+	{
+		UE_LOG(LogGridlyLocalizationServiceProvider, Log, TEXT("Successfully deleted records."));
+
+		// Only show the success message when all batches are done
+		if (CompletedBatches == TotalBatchesToProcess && !IsRunningCommandlet())
+		{
+			// Prepare and show a success message dialog
+			FString Message = FString::Printf(TEXT("Number of entries deleted: %llu"), ExportForTargetEntriesDeleted);
+
+			UE_LOG(LogGridlyEditor, Log, TEXT("%s"), *Message);
+			FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(Message));
+		}
+	}
+	else
+	{
+		// Handle any failure cases
+		FString ErrorMessage = FString::Printf(TEXT("Failed to delete records. HTTP Code: %d, Response: %s"),
+			Response->GetResponseCode(), *Response->GetContentAsString());
+
+		UE_LOG(LogGridlyLocalizationServiceProvider, Error, TEXT("%s"), *ErrorMessage);
+
+		// Display a failure message dialog when all batches are done
+		if (CompletedBatches == TotalBatchesToProcess && !IsRunningCommandlet())
+		{
+			FString DialogMessage = FString::Printf(TEXT("Error during record deletion.\nHTTP Code: %d\nResponse: %s"),
+				Response->GetResponseCode(), *Response->GetContentAsString());
+
+			FMessageDialog::Open(EAppMsgType::Ok, FText::FromString(DialogMessage));
+		}
+	}
+}
+
+
+
+FString FGridlyLocalizationServiceProvider::RemoveNamespaceFromKey(FString& InputString)
+{
+
+	// Find the first comma and chop the string from the right if a comma exists
+	int32 CommaIndex;
+	if (InputString.FindChar(TEXT(','), CommaIndex))
+	{
+		return InputString.RightChop(CommaIndex + 1);
+	}
+
+	// Return the string as-is if no comma is found
+	return InputString;
+}
+
 
 #undef LOCTEXT_NAMESPACE

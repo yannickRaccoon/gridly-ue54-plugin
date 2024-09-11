@@ -82,6 +82,8 @@ Once you have made sure that your source and target languages are set up correct
 
 After export, open the Grid in your browser to edit the translations in the browser (may require refresh to see changes).
 
+You can use the Sync records setting in the plugin settings to delete the records from Gridly that has been removed from UE. This setting may slow down the export process, because after it send to entries into Gridly, it checks whether the Grid has any record that not exists in the game target you sent.
+
 ### Importing Translations
 
 After you're done translating, you can import translations for all target cultures back to project with just a single click.

@@ -161,7 +161,7 @@ int32 UGridlyImportExportCommandlet::Main(const FString& Params)
 		 FHttpRequestCompleteDelegate ReqDelegate = GridlyProvider->CreateExportNativeCultureDelegate();
 		 const FText SlowTaskText = LOCTEXT("ExportNativeCultureForTargetToGridlyText", "Exporting native culture for target to Gridly");
 
-		 GridlyProvider->ExportForTargetToGridly(FirstLocTarget, ReqDelegate, SlowTaskText);
+		 GridlyProvider->ExportForTargetToGridly(FirstLocTarget, ReqDelegate, SlowTaskText, false);
 
 		 // Wait for Http requests
 		 while (GridlyProvider->HasRequestsPending())

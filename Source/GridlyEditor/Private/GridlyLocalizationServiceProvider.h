@@ -12,14 +12,26 @@
 #include <fstream>
 #include <iostream>
 
+
 class FGridlyLocalizationServiceProvider final : public ILocalizationServiceProvider
 {
+
+
+	class FGridlyTypeRecord
+	{
+	public:
+		FString Id;
+		FString Path;
+
+		FGridlyTypeRecord(const FString& InId, const FString& InPath)
+			: Id(InId), Path(InPath)
+		{}
+	};
 public:
 	FGridlyLocalizationServiceProvider();
 
 public:
 	/* ILocalizationServiceProvider implementation */
-
 
 	virtual void Init(bool bForceConnection = true) override;
 	virtual void Close() override;
@@ -37,7 +49,7 @@ public:
 		const TArray<FLocalizationServiceTranslationIdentifier>& InTranslationIds,
 		ELocalizationServiceOperationConcurrency::Type InConcurrency = ELocalizationServiceOperationConcurrency::Synchronous,
 		const FLocalizationServiceOperationComplete& InOperationCompleteDelegate =
-			FLocalizationServiceOperationComplete()) override;
+		FLocalizationServiceOperationComplete()) override;
 	virtual bool CanCancelOperation(
 		const TSharedRef<ILocalizationServiceOperation, ESPMode::ThreadSafe>& InOperation) const override;
 	virtual void CancelOperation(const TSharedRef<ILocalizationServiceOperation, ESPMode::ThreadSafe>& InOperation) override;
@@ -60,7 +72,12 @@ public:
 	bool HasRequestsPending() const;
 
 	void ExportForTargetToGridly(ULocalizationTarget* LocalizationTarget, FHttpRequestCompleteDelegate& ReqDelegate, const FText& SlowTaskText, bool bIncTargetTranslation = false);
-	
+
+	// New functions for fetching and parsing CSV from Gridly
+	void FetchGridlyCSV(); // Fetches the CSV data from Gridly
+	void OnGridlyCSVResponseReceived(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful); // Callback for when the CSV is received
+	void ParseCSVAndCreateRecords(const FString& CSVContent); // Parses CSV content and creates records
+
 private:
 	// Import
 	bool IsFileNotEmpty(const std::string& filePath);
@@ -70,6 +87,8 @@ private:
 	TSharedPtr<FScopedSlowTask> ImportAllCulturesForTargetFromGridlySlowTask;
 	TArray<FString> CurrentCultureDownloads;
 	int SuccessfulDownloads;
+	size_t ExportForTargetEntriesDeleted = 0;
+
 
 	// Export
 
@@ -85,4 +104,14 @@ private:
 
 	void ExportTranslationsForTargetToGridly(TWeakObjectPtr<ULocalizationTarget> LocalizationTarget, bool bIsTargetSet);
 	void OnExportTranslationsForTargetToGridly(FHttpRequestPtr HttpRequestPtr, FHttpResponsePtr HttpResponsePtr, bool bSuccess);
+
+	TArray<FGridlyTypeRecord> GridlyRecords; // List to store the records from Gridly
+	TArray<FGridlyTypeRecord> UERecords;
+	FString RemoveNamespaceFromKey(FString& InputString);
+	
+	void DeleteRecordsFromGridly(const TArray<FString>& RecordsToDelete);
+	void OnDeleteRecordsResponse(FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful);
+
+	int32 CompletedBatches;         // Track the number of completed batches
+	int32 TotalBatchesToProcess;    // Track the total number of batches
 };

@@ -88,7 +88,7 @@ bool FGridlyExporter::ConvertToJson(const TArray<FPolyglotTextData>& PolyglotTex
 			// Add context
 
 			if (ItemContext && GameSettings->bExportContext)
-			{
+			{				
 				TSharedPtr<FJsonObject> CellJsonObject = MakeShareable(new FJsonObject);
 				CellJsonObject->SetStringField("columnId", *GameSettings->ContextColumnId);
 				CellJsonObject->SetStringField("value",
