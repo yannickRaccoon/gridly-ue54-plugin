@@ -1,12 +1,23 @@
 ﻿// Copyright (c) 2021 LocalizeDirect AB
-#include "Gridly.h" // Make sure this is included first
+
+// Include your own module's header first
+#include "Gridly.h" 
 
 #if WITH_EDITOR
+// For settings-related functionality in the editor
 #include "ISettingsContainer.h"
 #include "ISettingsModule.h"
 #include "ISettingsSection.h"
+// For accessing Gridly's game settings
 #include "GridlyGameSettings.h"
 #endif
+
+// For logging functionality
+#include "Logging/LogMacros.h"
+
+// For module management
+#include "Modules/ModuleManager.h"
+
 
 DEFINE_LOG_CATEGORY(LogGridly);
 

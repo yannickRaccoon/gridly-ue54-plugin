@@ -10,7 +10,7 @@
 #include "GridlyImportExportCommandlet.generated.h"
 
 /**
- *	GridlyImportExportCommandlet: Commandlet to Export Native Texts to Gridy and Import translations from Gridly. 
+ *	GridlyImportExportCommandlet: Commandlet to Export Native Texts to Gridy and Import translations from Gridly.
  */
 UCLASS()
 class UGridlyImportExportCommandlet : public UGatherTextCommandletBase

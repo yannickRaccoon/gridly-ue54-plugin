@@ -1,6 +1,7 @@
 ﻿#pragma once
+
 #include "Modules/ModuleInterface.h"
-#include "Engine.h"
+#include "Logging/LogMacros.h" // For DECLARE_LOG_CATEGORY_EXTERN
 
 DECLARE_LOG_CATEGORY_EXTERN(LogGridly, Log, Log);
 

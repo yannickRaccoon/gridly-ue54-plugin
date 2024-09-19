@@ -267,6 +267,7 @@ void FGridlyLocalizationServiceProvider::ImportAllCulturesForTargetFromGridly(
 
 		for (int i = 0; i < LocalizationTarget->Settings.SupportedCulturesStatistics.Num(); i++)
 		{
+			
 			if (i != LocalizationTarget->Settings.NativeCultureIndex)
 			{
 				const FCultureStatistics CultureStats = LocalizationTarget->Settings.SupportedCulturesStatistics[i];

@@ -2,6 +2,7 @@
 
 #include "GridlyCultureConverter.h"
 
+// Include necessary Unreal Engine headers
 #include "Gridly.h"
 #include "GridlyGameSettings.h"
 
@@ -10,8 +11,16 @@
 #include "LocalizationTargetTypes.h"
 #endif
 
+// For culture and regex handling
 #include "Internationalization/Regex.h"
 #include "Kismet/KismetInternationalizationLibrary.h"
+
+// For logging
+#include "Logging/LogMacros.h"
+
+// For TArray and FString
+#include "Containers/Array.h"
+#include "Containers/UnrealString.h"
 
 TArray<FString> FGridlyCultureConverter::GetTargetCultures()
 {

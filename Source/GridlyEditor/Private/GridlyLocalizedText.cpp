@@ -111,8 +111,9 @@ bool FGridlyLocalizedText::GetAllTextAsPolyglotTextDatas(ULocalizationTarget* Lo
 						SourceNamespace = ""; // Or any appropriate fallback
 					}
 				}
-
-				const FString SourceText = TranslationText.Text;
+				//1047
+				//const FString SourceText = TranslationText.Text;
+				const FString SourceText = InManifestEntry->Source.Text;
 
 				FPolyglotTextData PolyglotTextData(ELocalizedTextSourceCategory::Game, SourceNamespace, SourceKey, SourceText,
 					NativeCulture);
