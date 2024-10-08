@@ -116,6 +116,7 @@ void UGridlyTask_ImportDataTableFromGridly::RequestPage(const int ViewIdIndex, c
 
 			for (int j = 0; j < GridlyTableRows[i].Cells.Num(); j++)
 			{
+				JsonObject->SetStringField("_path", GridlyTableRows[i].Path);
 				JsonObject->SetStringField(GridlyTableRows[i].Cells[j].ColumnId, GridlyTableRows[i].Cells[j].Value);
 			}
 

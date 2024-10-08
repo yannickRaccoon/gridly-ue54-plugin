@@ -201,6 +201,10 @@ bool FGridlyExporter::ConvertToJson(const UGridlyDataTable* GridlyDataTable, FSt
 				// RowName
 				JsonWriter->WriteValue("id", RowName.ToString());
 
+				// Now handle the _path field
+				FString PathValue;
+				bool bPathFound = false;
+
 				// Now the values
 				JsonWriter->WriteArrayStart("cells");
 
@@ -213,6 +217,14 @@ bool FGridlyExporter::ConvertToJson(const UGridlyDataTable* GridlyDataTable, FSt
 
 					const FString Identifier = DataTableUtils::GetPropertyExportName(BaseProp, DTExportFlags);
 					const void* Data = BaseProp->ContainerPtrToValuePtr<void>(RowData, 0);
+
+					// Check if the property is _path and handle it separately
+					if (Identifier == "_path")
+					{
+						PathValue = DataTableUtils::GetPropertyValueAsString(BaseProp, static_cast<uint8*>(RowData), DTExportFlags);
+						bPathFound = true;
+						continue;  // Skip adding _path to the cells array
+					}
 
 					if (BaseProp->ArrayDim == 1)
 					{
@@ -251,22 +263,6 @@ bool FGridlyExporter::ConvertToJson(const UGridlyDataTable* GridlyDataTable, FSt
 							const bool PropertyValue = BoolProp->GetPropertyValue(Data);
 							JsonWriter->WriteValue("value", PropertyValue);
 						}
-						else if (const FArrayProperty* ArrayProp = CastField<const FArrayProperty>(BaseProp))
-						{
-							// Not supported
-						}
-						else if (const FSetProperty* SetProp = CastField<const FSetProperty>(BaseProp))
-						{
-							// Not supported
-						}
-						else if (const FMapProperty* MapProp = CastField<const FMapProperty>(BaseProp))
-						{
-							// Not supported
-						}
-						else if (const FStructProperty* StructProp = CastField<const FStructProperty>(BaseProp))
-						{
-							// Not supported
-						}
 						else
 						{
 							const FString PropertyValue = DataTableUtils::GetPropertyValueAsString(BaseProp,
@@ -279,6 +275,18 @@ bool FGridlyExporter::ConvertToJson(const UGridlyDataTable* GridlyDataTable, FSt
 				}
 
 				JsonWriter->WriteArrayEnd();
+				
+				// Now add the path if it was found
+				if (bPathFound)
+				{
+					JsonWriter->WriteValue("path", *PathValue);  // Explicitly convert FString to TCHAR*
+				}
+				else
+				{
+					JsonWriter->WriteValue("path", TEXT(""));  // Correctly pass an empty TCHAR* string
+				}
+
+				
 			}
 			JsonWriter->WriteObjectEnd();
 		}
@@ -293,3 +301,4 @@ bool FGridlyExporter::ConvertToJson(const UGridlyDataTable* GridlyDataTable, FSt
 
 	return false;
 }
+
