@@ -913,8 +913,8 @@ void FGridlyLocalizationServiceProvider::ParseCSVAndCreateRecords(const FString&
 			}
 		}
 
-		// If path is found but ID is not found for that path, or if path isn't found at all
-		if (!RecordIdFoundInUE)
+		// Only handle deletion if the path was found, but the ID was not found for that path
+		if (PathFoundInUE && !RecordIdFoundInUE)
 		{
 			UE_LOG(LogGridlyLocalizationServiceProvider, Log, TEXT("No match found for GridlyRecord: ID = %s, Path = %s. Adding to delete list."), *GridlyRecord.Id, *GridlyRecord.Path);
 
@@ -922,20 +922,16 @@ void FGridlyLocalizationServiceProvider::ParseCSVAndCreateRecords(const FString&
 			if (GridlyRecord.Path.Len() == 0)
 			{
 				RecordsToDelete.Add(GridlyRecord.Id);
-				continue;
 			}
-
 			// If the path starts with "blueprints/", add the ID with a comma prefix
-			if (GridlyRecord.Path.StartsWith(TEXT("blueprints/")))
+			else if (GridlyRecord.Path.StartsWith(TEXT("blueprints/")))
 			{
 				RecordsToDelete.Add("," + GridlyRecord.Id);
-				continue;
 			}
 			else
 			{
 				// Otherwise, add the path and ID combination
 				RecordsToDelete.Add(GridlyRecord.Path + "," + GridlyRecord.Id);
-				continue;
 			}
 		}
 	}
