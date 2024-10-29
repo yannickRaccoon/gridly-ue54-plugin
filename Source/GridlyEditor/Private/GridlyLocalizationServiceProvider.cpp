@@ -897,14 +897,12 @@ void FGridlyLocalizationServiceProvider::ParseCSVAndCreateRecords(const FString&
 	for (const FGridlyTypeRecord& GridlyRecord : GridlyRecords)
 	{
 		// Check if any UERecord has a matching path first
-		bool PathFoundInUE = false;
 		bool RecordIdFoundInUE = false;
 
 		for (const FGridlyTypeRecord& UERecord : UERecords)
 		{
 			if (GridlyRecord.Path == UERecord.Path)
 			{
-				PathFoundInUE = true; // The path matches
 				if (GridlyRecord.Id == UERecord.Id)
 				{
 					RecordIdFoundInUE = true; // The record ID matches as well for the same path
@@ -914,7 +912,7 @@ void FGridlyLocalizationServiceProvider::ParseCSVAndCreateRecords(const FString&
 		}
 
 		// Only handle deletion if the path was found, but the ID was not found for that path
-		if (PathFoundInUE && !RecordIdFoundInUE)
+		if (!RecordIdFoundInUE)
 		{
 			UE_LOG(LogGridlyLocalizationServiceProvider, Log, TEXT("No match found for GridlyRecord: ID = %s, Path = %s. Adding to delete list."), *GridlyRecord.Id, *GridlyRecord.Path);
 
